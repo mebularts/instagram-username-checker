@@ -356,7 +356,7 @@
     const list = Array.from(new Set(names)).slice(0,200);
     if(!list.length){ el('#status').textContent=L.needOne; return; }
     const proxyRoot = (el('#proxy').value||'').trim();
-    el('#status').textContent=L.checking; renderResults([]); el('#modeChip').textContent = proxyRoot? 'Proxy: aktif — gerçek sonuç' : 'Proxy gerekli: gerçek kontrol';
+    el('#status').textContent=L.checking; renderResults([]); el('#modeChip').textContent = proxyRoot? '👨🏻‍💻 by <strong>@mebularts</strong>' : '👨🏻‍💻 by <strong>@mebularts</strong>';
     const out=[];
 
     (function process(i){
