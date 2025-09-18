@@ -133,8 +133,8 @@
 <script>
 (function(){
   const t = {
-    tr:{ title:'Instagram Username Checker', subtitle:'Kullanıcı adları boşta mı dolu mu? Doluysa profil kartını gösterir.', usernames:'Kullanıcı adları', check:'Kontrol Et', samples:'Örnekleri Doldur', results:'Sonuçlar', unknown:'Bilinmiyor', error:'Hata/Kısıt', useProxy:'Proxy kurup tekrar deneyin.', taken:'Kullanımda', available:'Boşta', availableMsg:'Bu kullanıcı adı kullanılabilir.', copy:'kopyala', signup:"Instagram'a kaydol", needOne:'Önce en az bir kullanıcı adı yazın.', proxyLbl:'Proxy URL', proxyHint:'Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev', worker:'Cloudflare Worker Kodu', genTitle:'Varyasyon Üretici', baseLbl:'Temel isim', genBtn:'Üret', clear:'Temizle', amount:'Adet' },
-    en:{ title:'Instagram Username Checker', subtitle:'Are usernames free or taken? If taken, shows a profile card.', usernames:'Usernames', check:'Check', samples:'Fill samples', results:'Results', unknown:'Unknown', error:'Error/Constraint', useProxy:'Set up the proxy and try again.', taken:'Taken', available:'Available', availableMsg:'This username is available.', copy:'copy', signup:'Sign up', needOne:'Enter at least one username first.', proxyLbl:'Proxy URL', proxyHint:'Enter your Cloudflare Worker root. Eg: https://subdomain.workers.dev', worker:'Cloudflare Worker Code', genTitle:'Variation Generator', baseLbl:'Base name', genBtn:'Generate', clear:'Clear', amount:'Count' }
+    tr:{ title:'Instagram Username Checker', subtitle:'Kullanıcı adları boşta mı dolu mu? Doluysa profil kartını gösterir.', usernames:'Kullanıcı adları', check:'Kontrol Et', samples:'Örnekleri Doldur', results:'Sonuçlar', unknown:'Bilinmiyor', error:'Hata/Kısıt', useProxy:'Proxy kurup tekrar deneyin.', taken:'Kullanımda', available:'Boşta', availableMsg:'Bu kullanıcı adı kullanılabilir.', copy:'kopyala', signup:"Instagram'a kaydol", needOne:'Önce en az bir kullanıcı adı yazın.', proxyLbl:'Proxy URL', proxyHint:'Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev', worker:'Cloudflare Worker Kodu', genTitle:'Varyasyon Üretici', baseLbl:'Temel isim', genBtn:'Üret', clear:'Temizle', amount:'Adet', checking:'Kontrol ediliyor...', done:'Bitti' },
+    en:{ title:'Instagram Username Checker', subtitle:'Are usernames free or taken? If taken, shows a profile card.', usernames:'Usernames', check:'Check', samples:'Fill samples', results:'Results', unknown:'Unknown', error:'Error/Constraint', useProxy:'Set up the proxy and try again.', taken:'Taken', available:'Available', availableMsg:'This username is available.', copy:'copy', signup:'Sign up', needOne:'Enter at least one username first.', proxyLbl:'Proxy URL', proxyHint:'Enter your Cloudflare Worker root. Eg: https://subdomain.workers.dev', worker:'Cloudflare Worker Code', genTitle:'Variation Generator', baseLbl:'Base name', genBtn:'Generate', clear:'Clear', amount:'Count', checking:'Checking...', done:'Done' }
   }
   let lang = 'tr';
   let dark = true;
@@ -183,76 +183,156 @@
     for(const w of turk){ for(const s of seps){ out.add(normalize(core+s+w)); } }
     return Array.from(out).filter(Boolean).slice(0, Number(n)||30);
   }
-  function decideAvailabilityFromHTML(status,text){
+  function decideAvailabilityFromHTML(status,text,u=''){
     const lower=(text||'').toLowerCase();
-    const notFound = status===404 || lower.includes('page not found') || lower.includes("sorry, this page isn't available");
-    return { exists: !notFound };
+    const notFoundSigs=[
+      'page not found',
+      "sorry, this page isn't available",
+      'üzgünüz, bu sayfaya ulaşılamıyor',
+      'link you followed may be broken',
+      'bağlantı bozuk olabilir',
+    ];
+    if(status===404 || notFoundSigs.some(sig=>lower.includes(sig))) return { exists:false };
+
+    const existsSigs=[
+      '/followers/', 'takipçi', 'following/', 'gönderi', 'profili düzenle',
+      'aria-label="seçenekler"', 'role="img"', 'og:image', 'og:title', 'profile picture'
+    ];
+    if(existsSigs.some(sig=>lower.includes(sig))) return { exists:true };
+
+    if(u){
+      const uLower=(u||'').toLowerCase();
+      if(lower.includes(`/${uLower}/followers/`)||lower.includes(`>${uLower}<`)||lower.includes(`content="https://www.instagram.com/${uLower}/"`)) return { exists:true };
+    }
+
+    return { exists:false };
   }
 
-  async function fetchViaProxy(proxy,url){
-    const r = await fetch(`${proxy}?u=${encodeURIComponent(url)}`, {redirect:'follow'});
-    const text = await r.text();
-    return {status:r.status, text};
+  function fetchViaProxy(proxy,url){
+    return fetch(`${proxy}?u=${encodeURIComponent(url)}`, {redirect:'follow'})
+      .then(r=>r.text().then(text=>({status:r.status, text})));
   }
 
-  async function checkOne(username, proxyRoot, live){
+  function checkOne(username, proxyRoot, live){
     const u = normalize(username);
-    if(!u) return { username:u, error:'empty' };
+    if(!u) return Promise.resolve({ username:u, error:'empty' });
 
-    // Sandbox-safe: In non-live mode, simulate fast responses to avoid external network.
     if(!live){
       const taken = ['instagram','zuck','cristiano','mebularts'];
       const exists = taken.includes(u);
-      return {
+      return Promise.resolve({
         username:u,
         exists,
         avatar: exists? 'https://i.pravatar.cc/96?u='+encodeURIComponent(u) : '',
         title: exists? (u+' • Mock User') : '',
         desc: exists? 'Mock bio for '+u : ''
-      };
+      });
     }
 
-    try{
-      if(proxyRoot){
-        const jurl = `https://www.instagram.com/${u}/?__a=1&__d=dis`;
-        const jr = await fetchViaProxy(proxyRoot, jurl);
-        if(jr.status===200 && jr.text.includes('profile_pic_url')){
-          let avatar='', title='', desc='';
-          try{
-            const data = JSON.parse(jr.text);
-            const g = (data.graphql && data.graphql.user) || data.items || null;
-            const user = Array.isArray(g)? g[0] : g;
-            avatar = (user.profile_pic_url_hd||user.profile_pic_url)||'';
-            title = (user.full_name||'')+' | '+u;
-            desc = (user.biography||'');
-          }catch(e){}
-          return { username:u, exists:true, avatar:title?avatar:'', title:title||u, desc };
-        }
-        const hr = await fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`);
-        const d = decideAvailabilityFromHTML(hr.status, hr.text);
-        let avatar='', title='', desc='';
-        const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        const ogTitle = hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        const ogDesc = hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        avatar = ogImg? ogImg[1] : '';
-        title = ogTitle? ogTitle[1] : u;
-        desc = ogDesc? ogDesc[1] : '';
-        return { username:u, exists:d.exists, avatar, title, desc };
-      }
-      const fr = await fetch(`https://r.jina.ai/http://www.instagram.com/${u}/`);
-      const txt = await fr.text();
-      const d = decideAvailabilityFromHTML(fr.status, txt);
-      let avatar='', title='', desc='';
-      const ogImg = txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-      const ogTitle = txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-      const ogDesc = txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-      avatar = ogImg? ogImg[1] : '';
-      title = ogTitle? ogTitle[1] : u;
-      desc = ogDesc? ogDesc[1] : '';
-      return { username:u, exists:d.exists, avatar, title, desc };
-    }catch(e){
-      return { username:u, error:e.message };
+    if(proxyRoot){
+      return fetchViaProxy(proxyRoot, `https://www.instagram.com/api/v1/users/web_profile_info/?username=${u}`)
+        .then(api=>{
+          if(api.status===200 && api.text){
+            try{
+              const j = JSON.parse(api.text);
+              if(j && j.data && j.data.user){
+                const usr=j.data.user;
+                const avatar=(usr.hd_profile_pic_url_info&&usr.hd_profile_pic_url_info.url)||usr.profile_pic_url||'';
+                const title=(usr.full_name||'')+' | '+u;
+                const desc=usr.biography||'';
+                return { username:u, exists:true, avatar, title, desc };
+              }
+              if(j && j.data && j.data.user===null){
+                return { username:u, exists:false, avatar:'', title:u, desc:'' };
+              }
+            }catch(e){}
+          }
+          return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/?__a=1&__d=dis`).then(jr=>{
+            if(jr.status===200 && jr.text.includes('profile_pic_url')){
+              try{
+                const data = JSON.parse(jr.text);
+                const g = (data.graphql && data.graphql.user) || data.items || null;
+                const user = Array.isArray(g)? g[0] : g;
+                if(user){
+                  const avatar = (user.profile_pic_url_hd||user.profile_pic_url)||'';
+                  const title = (user.full_name||'')+' | '+u;
+                  const desc = (user.biography||'');
+                  return { username:u, exists:true, avatar, title:title||u, desc };
+                }
+              }catch(e){}
+            }
+            return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`).then(hr=>{
+              const d = decideAvailabilityFromHTML(hr.status, hr.text, u);
+              const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+              const ogTitle = hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+              const ogDesc = hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+              const cdnImgMatch = hr.text.match(/<img[^>]+src=["']([^"']+cdninstagram[^"']+)["'][^>]*>/i);
+              const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
+              const title = ogTitle? ogTitle[1] : u;
+              const desc = ogDesc? ogDesc[1] : '';
+              return { username:u, exists:d.exists, avatar, title, desc };
+            });
+          });
+        })
+        .catch(()=>{
+          return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`).then(hr=>{
+            const d = decideAvailabilityFromHTML(hr.status, hr.text, u);
+            const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+            const ogTitle = hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+            const ogDesc = hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+            const cdnImgMatch = hr.text.match(/<img[^>]+src=["']([^"']+cdninstagram[^"']+)["'][^>]*>/i);
+            const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
+            const title = ogTitle? ogTitle[1] : u;
+            const desc = ogDesc? ogDesc[1] : '';
+            return { username:u, exists:d.exists, avatar, title, desc };
+          });
+        });
     }
+
+    return fetch(`https://r.jina.ai/http://www.instagram.com/${u}/`)
+      .then(fr=>fr.text().then(txt=>{
+        const status = fr.status;
+        const d = decideAvailabilityFromHTML(status, txt, u);
+        const ogImg = txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        const ogTitle = txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        const ogDesc = txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        const cdnImgMatch = txt.match(/<img[^>]+src=["']([^"']+cdninstagram[^"']+)["'][^>]*>/i);
+        const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
+        const title = ogTitle? ogTitle[1] : u;
+        const desc = ogDesc? ogDesc[1] : '';
+        return { username:u, exists:d.exists, avatar, title, desc };
+      }))
+      .catch(e=>({ username:u, error:e.message }));
+  }
+
+  function safeCopy(text){
+    return new Promise((resolve)=>{
+      try{
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(text).then(()=>resolve(true)).catch(()=>fallback());
+          return;
+        }
+      }catch(e){}
+      fallback();
+      function fallback(){
+        try{
+          const ta=document.createElement('textarea');
+          ta.value=text; ta.setAttribute('readonly','');
+          ta.style.position='fixed'; ta.style.left='-9999px';
+          document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,ta.value.length);
+          const ok=document.execCommand && document.execCommand('copy');
+          document.body.removeChild(ta); resolve(!!ok);
+        }catch(e){
+          try{
+            const temp=document.createElement('span'); temp.textContent=text;
+            temp.style.position='fixed'; temp.style.left='-9999px'; document.body.appendChild(temp);
+            const r=document.createRange(); r.selectNodeContents(temp);
+            const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            resolve(false);
+          }catch(e2){ resolve(false); }
+        }
+      }
+    });
   }
 
   function renderResults(items){
@@ -292,7 +372,7 @@
           </div>
           <div class="muted" style="margin-top:6px">${L.availableMsg}</div>
           <div class="row-inline" style="gap:8px; margin-top:8px; flex-wrap:wrap">
-            <button class="btn ghost" onclick="navigator.clipboard.writeText('@${r.username}')">@${r.username} ${L.copy}</button>
+            <button class="btn ghost copy-btn" data-copy="@${r.username}">@${r.username} ${L.copy}</button>
             <a class="btn ghost" href="https://www.instagram.com/accounts/emailsignup/" target="_blank">${L.signup}</a>
           </div>
         `;
@@ -301,7 +381,7 @@
     }
   }
 
-  async function runCheck(){
+  function runCheck(){
     const L=t[lang];
     const names = el('#inputNames').value.split(/\r?\n/).map(s=>normalize(s.replace(/^@+/,''))).filter(Boolean);
     const list = Array.from(new Set(names)).slice(0,200);
@@ -310,14 +390,21 @@
     const live = !!proxyRoot; // sandbox‑safe default: mock unless proxy provided
     el('#status').textContent=L.checking; renderResults([]);
     const out=[];
-    for(let i=0;i<list.length;i++){
-      const item = await checkOne(list[i], proxyRoot, live);
-      out.push(item); renderResults(out);
-      el('#status').textContent = `${i+1}/${list.length}`;
-      if(item.error && el('#stopOnError').checked) break;
-      await new Promise(r=>setTimeout(r, 180));
-    }
-    el('#status').textContent=L.done;
+
+    (function process(i){
+      if(i>=list.length){ el('#status').textContent=L.done; return; }
+      checkOne(list[i], proxyRoot, live).then(item=>{
+        out.push(item); renderResults(out);
+        el('#status').textContent = `${i+1}/${list.length}`;
+        if(item.error && el('#stopOnError').checked){ el('#status').textContent=L.done; return; }
+        setTimeout(()=>process(i+1), 180);
+      }).catch(e=>{
+        out.push({ username:list[i], error:e.message }); renderResults(out);
+        el('#status').textContent = `${i+1}/${list.length}`;
+        if(el('#stopOnError').checked){ el('#status').textContent=L.done; return; }
+        setTimeout(()=>process(i+1), 180);
+      });
+    })(0);
   }
 
   // UI bindings
@@ -334,6 +421,16 @@
     el('#inputNames').value = cur ? (cur+'\n'+vars) : vars;
   });
   el('#btnClear').addEventListener('click', ()=>{ el('#inputNames').value=''; renderResults([]); el('#lblCount').textContent=''; });
+
+  // Event delegation for copy buttons (clipboard‑safe)
+  document.addEventListener('click', (ev)=>{
+    const btn=ev.target.closest('.copy-btn'); if(!btn) return;
+    const txt=btn.getAttribute('data-copy')||''; const label=btn.textContent;
+    safeCopy(txt).then((ok)=>{
+      btn.textContent = ok ? (lang==='tr'?'Kopyalandı':'Copied') : (lang==='tr'?'Kopya engellendi — Ctrl+C':'Copy blocked — Ctrl+C');
+      setTimeout(()=>{ btn.textContent=label; }, 1400);
+    });
+  });
 
   // Defaults
   setLang('tr'); setTheme(true);
@@ -355,6 +452,12 @@
       assert('404 => not exists', d1.exists===false);
       assert('error text => not exists', d2.exists===false);
       assert('generic 200 => exists', d3.exists===true);
+      const d4 = decideAvailabilityFromHTML(200, '<a href="/mebularts/followers/">', 'mebularts');
+      assert('followers marker => exists', d4.exists===true);
+      const d5 = decideAvailabilityFromHTML(200, 'Üzgünüz, bu sayfaya ulaşılamıyor.');
+      assert('turkish not found => not exists', d5.exists===false);
+      const maybePromise = safeCopy('test');
+      assert('safeCopy returns Promise-like', !!maybePromise && typeof maybePromise.then==='function');
     }catch(e){
       const li=document.createElement('li'); li.textContent='Tests crashed: '+e.message; li.className='fail'; el('#testsList').appendChild(li);
     }
