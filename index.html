@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Instagram Username Checker — Sandbox‑Safe</title>
+  <title>Instagram Username Checker — Doğruluk Modu</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%236ee7b7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='12' fill='url(%23g)'/%3E%3Ctext x='50%25' y='58%25' text-anchor='middle' font-size='34' fill='white'%3Ei%3C/text%3E%3C/svg%3E">
   <style>
     :root{
@@ -37,7 +37,7 @@
     .pill.bad{background:rgba(239,68,68,.12); color:#ffd3d3; border-color:rgba(239,68,68,.35)}
     .row-inline{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
     .switch{position:relative; width:56px; height:30px; background:rgba(255,255,255,.12); border-radius:999px; border:1px solid var(--border); cursor:pointer}
-    .switch.knob{position:absolute; inset:2px; background:#fff; width:26px; height:26px; border-radius:999px; transform:translateX(0); transition:transform .2s ease}
+    .switch .knob{position:absolute; inset:2px; background:#fff; width:26px; height:26px; border-radius:999px; transform:translateX(0); transition:transform .2s ease}
     .switch.on .knob{transform:translateX(26px)}
     .segment{display:inline-grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid var(--border)}
     .segbtn{padding:6px 10px; border-radius:8px; border:0; background:transparent; color:var(--fg); cursor:pointer}
@@ -63,7 +63,7 @@
         <div id="themeSwitch" class="switch on" role="switch" aria-checked="true">
           <div class="knob"></div>
         </div>
-        <span class="chip">Sandbox‑safe</span>
+        <span id="modeChip" class="chip">Proxy gerekli: gerçek kontrol</span>
       </div>
     </div>
 
@@ -87,13 +87,27 @@
           <div id="proxyHint" class="muted" style="font-size:13px; margin-top:6px">Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev</div>
           <details style="margin-top:8px">
             <summary id="workerCodeTitle" class="muted" style="cursor:pointer">Cloudflare Worker Kodu</summary>
-            <pre class="input" style="white-space:pre-wrap; overflow:auto; font-size:12px">export default {
+<pre class="input" style="white-space:pre-wrap; overflow:auto; font-size:12px">export default {
   async fetch(req) {
-    const u = new URL(req.url).searchParams.get('u');
-    if (!u) return new Response('missing u', { status: 400 });
-    const r = await fetch(u, { redirect: 'follow' });
-    const h = new Headers(r.headers); h.set('access-control-allow-origin', '*');
-    return new Response(await r.arrayBuffer(), { status: r.status, headers: h });
+    const url = new URL(req.url)
+    const u = url.searchParams.get('u')
+    if (!u) return new Response('missing u', { status: 400 })
+    const h = new Headers({
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36',
+      'accept': 'application/json, text/html;q=0.8,*/*;q=0.5',
+      'accept-language': 'en-US,en;q=0.9,tr;q=0.8',
+      'x-ig-app-id': '936619743392459',
+      'sec-fetch-site': 'same-origin',
+    })
+    try {
+      const r = await fetch(u, { redirect: 'follow', headers: h })
+      const rh = new Headers(r.headers)
+      rh.set('access-control-allow-origin', '*')
+      rh.set('access-control-expose-headers', '*')
+      return new Response(await r.arrayBuffer(), { status: r.status, headers: rh })
+    } catch (e) {
+      return new Response(String(e), { status: 502, headers: { 'access-control-allow-origin': '*' } })
+    }
   }
 }</pre>
           </details>
@@ -165,7 +179,13 @@
   }
 
   function normalize(u){
-    return (u||'').toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30);
+    // Instagram: a-z 0-9 . _ , max 30, cannot start with dot, cannot end with dot, no consecutive dots
+    u=(u||'').toLowerCase().replace(/[^a-z0-9._]/g,'');
+    u=u.slice(0,30);
+    u=u.replace(/\.{2,}/g,'.'); // collapse consecutive dots
+    u=u.replace(/^\.+/,'');
+    u=u.replace(/\.+$/,'');
+    return u;
   }
   function genVariations(base,n){
     base=(base||'').trim().toLowerCase(); if(!base) return [];
@@ -213,54 +233,46 @@
       .then(r=>r.text().then(text=>({status:r.status, text})));
   }
 
-  function checkOne(username, proxyRoot, live){
+  function checkOne(username, proxyRoot){
     const u = normalize(username);
     if(!u) return Promise.resolve({ username:u, error:'empty' });
+    if(!proxyRoot) return Promise.resolve({ username:u, error:'proxy-required' });
 
-    if(!live){
-      const taken = ['instagram','zuck','cristiano','mebularts'];
-      const exists = taken.includes(u);
-      return Promise.resolve({
-        username:u,
-        exists,
-        avatar: exists? 'https://i.pravatar.cc/96?u='+encodeURIComponent(u) : '',
-        title: exists? (u+' • Mock User') : '',
-        desc: exists? 'Mock bio for '+u : ''
-      });
-    }
-
-    if(proxyRoot){
-      return fetchViaProxy(proxyRoot, `https://www.instagram.com/api/v1/users/web_profile_info/?username=${u}`)
-        .then(api=>{
-          if(api.status===200 && api.text){
-            try{
-              const j = JSON.parse(api.text);
-              if(j && j.data && j.data.user){
+    // 1) Primary: web_profile_info (most reliable and explicit null for available)
+    return fetchViaProxy(proxyRoot, `https://www.instagram.com/api/v1/users/web_profile_info/?username=${u}`)
+      .then(api=>{
+        if(api.status===200 && api.text){
+          try{
+            const j = JSON.parse(api.text);
+            if(j && j.data && Object.prototype.hasOwnProperty.call(j.data,'user')){
+              if(j.data.user===null){
+                return { username:u, exists:false, avatar:'', title:u, desc:'', method:'web_profile_info:null' };
+              } else if(j.data.user){
                 const usr=j.data.user;
                 const avatar=(usr.hd_profile_pic_url_info&&usr.hd_profile_pic_url_info.url)||usr.profile_pic_url||'';
                 const title=(usr.full_name||'')+' | '+u;
                 const desc=usr.biography||'';
-                return { username:u, exists:true, avatar, title, desc };
+                return { username:u, exists:true, avatar, title, desc, method:'web_profile_info:user' };
               }
-              if(j && j.data && j.data.user===null){
-                return { username:u, exists:false, avatar:'', title:u, desc:'' };
-              }
-            }catch(e){}
-          }
-          return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/?__a=1&__d=dis`).then(jr=>{
-            if(jr.status===200 && jr.text.includes('profile_pic_url')){
-              try{
-                const data = JSON.parse(jr.text);
-                const g = (data.graphql && data.graphql.user) || data.items || null;
-                const user = Array.isArray(g)? g[0] : g;
-                if(user){
-                  const avatar = (user.profile_pic_url_hd||user.profile_pic_url)||'';
-                  const title = (user.full_name||'')+' | '+u;
-                  const desc = (user.biography||'');
-                  return { username:u, exists:true, avatar, title:title||u, desc };
-                }
-              }catch(e){}
             }
+          }catch(e){/* fallthrough */}
+        }
+        // 2) Secondary: topsearch exact match (gives exists=true if found exact username)
+        return fetchViaProxy(proxyRoot, `https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(u)}&count=10`)
+          .then(sr=>{
+            if(sr.status===200){
+              try{
+                const j = JSON.parse(sr.text);
+                const arr = (j && j.users) ? j.users : [];
+                const exact = arr.find(x=>x && x.user && (x.user.username||'').toLowerCase()===u);
+                if(exact){
+                  const user=exact.user; const avatar=user.profile_pic_url||''; const title=(user.full_name||'')+' | '+u; const desc='';
+                  return { username:u, exists:true, avatar, title, desc, method:'topsearch:exact' };
+                }
+                return { username:u, exists:false, avatar:'', title:u, desc:'', method:'topsearch:none' };
+              }catch(e){/* fallthrough */}
+            }
+            // 3) Fallback: HTML heuristics
             return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`).then(hr=>{
               const d = decideAvailabilityFromHTML(hr.status, hr.text, u);
               const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
@@ -270,68 +282,23 @@
               const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
               const title = ogTitle? ogTitle[1] : u;
               const desc = ogDesc? ogDesc[1] : '';
-              return { username:u, exists:d.exists, avatar, title, desc };
+              return { username:u, exists:d.exists, avatar, title, desc, method:'html:'+hr.status };
             });
           });
-        })
-        .catch(()=>{
-          return fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`).then(hr=>{
-            const d = decideAvailabilityFromHTML(hr.status, hr.text, u);
-            const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-            const ogTitle = hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-            const ogDesc = hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-            const cdnImgMatch = hr.text.match(/<img[^>]+src=["']([^"']+cdninstagram[^"']+)["'][^>]*>/i);
-            const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
-            const title = ogTitle? ogTitle[1] : u;
-            const desc = ogDesc? ogDesc[1] : '';
-            return { username:u, exists:d.exists, avatar, title, desc };
-          });
-        });
-    }
-
-    return fetch(`https://r.jina.ai/http://www.instagram.com/${u}/`)
-      .then(fr=>fr.text().then(txt=>{
-        const status = fr.status;
-        const d = decideAvailabilityFromHTML(status, txt, u);
-        const ogImg = txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        const ogTitle = txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        const ogDesc = txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
-        const cdnImgMatch = txt.match(/<img[^>]+src=["']([^"']+cdninstagram[^"']+)["'][^>]*>/i);
-        const avatar = ogImg? ogImg[1] : (cdnImgMatch? cdnImgMatch[1] : '');
-        const title = ogTitle? ogTitle[1] : u;
-        const desc = ogDesc? ogDesc[1] : '';
-        return { username:u, exists:d.exists, avatar, title, desc };
-      }))
-      .catch(e=>({ username:u, error:e.message }));
+      })
+      .catch(e=>({ username:u, error:e.message||'network', method:'error' }));
   }
 
+  // Clipboard in sandbox: only use async Clipboard API, no execCommand fallbacks
   function safeCopy(text){
     return new Promise((resolve)=>{
       try{
         if(navigator.clipboard && navigator.clipboard.writeText){
-          navigator.clipboard.writeText(text).then(()=>resolve(true)).catch(()=>fallback());
+          navigator.clipboard.writeText(text).then(()=>resolve(true)).catch(()=>resolve(false));
           return;
         }
       }catch(e){}
-      fallback();
-      function fallback(){
-        try{
-          const ta=document.createElement('textarea');
-          ta.value=text; ta.setAttribute('readonly','');
-          ta.style.position='fixed'; ta.style.left='-9999px';
-          document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,ta.value.length);
-          const ok=document.execCommand && document.execCommand('copy');
-          document.body.removeChild(ta); resolve(!!ok);
-        }catch(e){
-          try{
-            const temp=document.createElement('span'); temp.textContent=text;
-            temp.style.position='fixed'; temp.style.left='-9999px'; document.body.appendChild(temp);
-            const r=document.createRange(); r.selectNodeContents(temp);
-            const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
-            resolve(false);
-          }catch(e2){ resolve(false); }
-        }
-      }
+      resolve(false);
     });
   }
 
@@ -342,22 +309,23 @@
     for(const r of items){
       const card = document.createElement('div'); card.className='card';
       if(r.error){
+        const msg = r.error==='proxy-required' ? (lang==='tr'?'Gerçek kontrol için üstte Proxy URL girin.':'Enter Proxy URL above for real checks.') : `${L.error}: ${r.error}`;
         card.innerHTML = `
           <div class="row-inline" style="justify-content:space-between">
             <div style="font-weight:700">@${r.username}</div>
             <span class="pill">${L.unknown}</span>
           </div>
-          <div style="margin-top:6px; color:#ffd3d3">${L.error}: ${r.error}</div>
-          <div class="muted" style="font-size:12px; margin-top:4px">${L.useProxy}</div>
+          <div style="margin-top:6px; color:#ffd3d3">${msg}</div>
         `;
       } else if(r.exists){
         card.innerHTML = `
-          <div class="row-inline" style="gap:10px">
+          <div class="row-inline" style="gap:10px; align-items:flex-start">
             <img class="avatar" referrerpolicy="no-referrer" src="${r.avatar||''}" onerror="this.style.visibility='hidden'" alt=""/>
             <div style="flex:1">
               <div class="row-inline" style="gap:8px; flex-wrap:wrap">
                 <a href="https://www.instagram.com/${r.username}/" target="_blank" style="font-weight:700; color:inherit; text-decoration:underline">@${r.username}</a>
                 <span class="pill bad">${L.taken}</span>
+                ${r.method?`<span class="pill">${r.method}</span>`:''}
               </div>
               <div class="muted" style="font-size:14px; margin-top:4px">${(r.title||'').replace(/\| Instagram/g,'')}</div>
               <div class="muted" style="font-size:12px; margin-top:4px">${r.desc||''}</div>
@@ -374,6 +342,7 @@
           <div class="row-inline" style="gap:8px; margin-top:8px; flex-wrap:wrap">
             <button class="btn ghost copy-btn" data-copy="@${r.username}">@${r.username} ${L.copy}</button>
             <a class="btn ghost" href="https://www.instagram.com/accounts/emailsignup/" target="_blank">${L.signup}</a>
+            ${r.method?`<span class="pill">${r.method}</span>`:''}
           </div>
         `;
       }
@@ -387,13 +356,12 @@
     const list = Array.from(new Set(names)).slice(0,200);
     if(!list.length){ el('#status').textContent=L.needOne; return; }
     const proxyRoot = (el('#proxy').value||'').trim();
-    const live = !!proxyRoot; // sandbox‑safe default: mock unless proxy provided
-    el('#status').textContent=L.checking; renderResults([]);
+    el('#status').textContent=L.checking; renderResults([]); el('#modeChip').textContent = proxyRoot? 'Proxy: aktif — gerçek sonuç' : 'Proxy gerekli: gerçek kontrol';
     const out=[];
 
     (function process(i){
       if(i>=list.length){ el('#status').textContent=L.done; return; }
-      checkOne(list[i], proxyRoot, live).then(item=>{
+      checkOne(list[i], proxyRoot).then(item=>{
         out.push(item); renderResults(out);
         el('#status').textContent = `${i+1}/${list.length}`;
         if(item.error && el('#stopOnError').checked){ el('#status').textContent=L.done; return; }
@@ -458,6 +426,10 @@
       assert('turkish not found => not exists', d5.exists===false);
       const maybePromise = safeCopy('test');
       assert('safeCopy returns Promise-like', !!maybePromise && typeof maybePromise.then==='function');
+      // Extra tests
+      assert('normalize length <= 30', normalize('a'.repeat(99)).length===30);
+      const uniq = new Set(genVariations('mebularts', 30));
+      assert('variations unique-ish', uniq.size===30);
     }catch(e){
       const li=document.createElement('li'); li.textContent='Tests crashed: '+e.message; li.className='fail'; el('#testsList').appendChild(li);
     }
