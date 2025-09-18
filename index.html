@@ -73,7 +73,7 @@ function App(){
       const res=await fetch(url); const txt=await res.text()
       let exists=false; let avatar='',title='',desc=''
       if(proxy){exists=res.status===200||res.status===301||res.status===302}
-      else{const lower=txt.toLowerCase(); const nf=['page not found','sorry, this page isn\\'t available','bulunamadı']; exists=!nf.some(sig=>lower.includes(sig))}
+      else{const lower=txt.toLowerCase(); const nf=["page not found","sorry, this page isn't available","bulunamadı"]; exists=!nf.some(s=>lower.includes(s))}
       const ogImg=txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i)
       const ogTitle=txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i)
       const ogDesc=txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i)
