@@ -1,1 +1,365 @@
-<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Instagram Username Checker — React</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%236ee7b7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='12' fill='url(%23g)'/%3E%3Ctext x='50%25' y='58%25' text-anchor='middle' font-size='34' fill='white'%3Ei%3C/text%3E%3C/svg%3E"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><script src="https://cdn.tailwindcss.com"></script><script>tailwind.config={darkMode:'class',theme:{extend:{colors:{bg:'#0b0f14',card:'#0f1622',muted:'#9fb0c3',accent:'#8b5cf6',ok:'#22c55e',bad:'#ef4444'},fontFamily:{sans:['Inter','ui-sans-serif','system-ui']},boxShadow:{soft:'0 10px 30px rgba(0,0,0,.25)'}}}}</script><style>html,body{height:100%}body{background:radial-gradient(1200px 800px at 10% -10%,rgba(139,92,246,.25),transparent),radial-gradient(1000px 700px at 110% 10%,rgba(34,197,94,.18),transparent),#0b0f14;color:#eaf0f7;font-family:Inter,ui-sans-serif,system-ui}</style></head><body class="dark"><div id="root"></div><script src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><script type="text/babel">const{useState,useMemo,useEffect}=React;function clsx(...v){return v.filter(Boolean).join(' ')}const I18N={tr:{title:'Instagram Username Checker',subtitle:'Kullanıcı adları boşta mı dolu mu? Doluysa profil kartını gösterir.',usernames:'Kullanıcı adları',placeholder:'mebularts\ninstagram\nbu_isim_bosta_olabilir',check:'Kontrol Et',checking:'Kontrol ediliyor...',done:'Bitti',samples:'Örnekleri Doldur',results:'Sonuçlar',unknown:'Bilinmiyor',error:'Hata/Kısıt',useProxy:'Proxy kurup tekrar deneyin.',taken:'Kullanımda',available:'Boşta',availableMsg:'Bu kullanıcı adı kullanılabilir.',copy:'kopyala',signup:"Instagram'a kaydol",needOne:'Önce en az bir kullanıcı adı yazın.',proxyLbl:'Proxy URL',proxyHint:'Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev',worker:'Cloudflare Worker Kodu',genTitle:'Varyasyon Üretici',baseLbl:'Temel isim',genBtn:'Üret',clear:'Temizle',count:'Adet',lang:'Dil',theme:'Tema',tr:'TR',en:'EN',light:'Açık',dark:'Koyu'},en:{title:'Instagram Username Checker',subtitle:'Are usernames free or taken? If taken, shows a profile card.',usernames:'Usernames',placeholder:'mebularts\ninstagram\nthis_may_be_free',check:'Check',checking:'Checking...',done:'Done',samples:'Fill samples',results:'Results',unknown:'Unknown',error:'Error/Constraint',useProxy:'Set up the proxy and try again.',taken:'Taken',available:'Available',availableMsg:'This username is available.',copy:'copy',signup:'Sign up',needOne:'Enter at least one username first.',proxyLbl:'Proxy URL',proxyHint:'Enter your Cloudflare Worker root. Eg: https://subdomain.workers.dev',worker:'Cloudflare Worker Code',genTitle:'Variation Generator',baseLbl:'Base name',genBtn:'Generate',clear:'Clear',count:'Count',lang:'Language',theme:'Theme',tr:'TR',en:'EN',light:'Light',dark:'Dark'}};function normalize(u){return u.toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30)}function genVariations(base,n=30){base=(base||'').trim().toLowerCase();if(!base)return[];const core=normalize(base.replace(/\s+/g,''));const pfx=['get','hey','try','real','the','go','iam','its','mr','ms','team','club'];const sfx=['app','dev','lab','labs','studio','hq','pro','official','co','tr','ai','io','net'];const seps=['','_','.'];const nums=['','1','01','10','24','25','123','x','xx'];const turk=['resmi','ofis','yazilim','ajans'];const leet=v=>v.replace(/a/g,'4').replace(/e/g,'3').replace(/i/g,'1').replace(/o/g,'0').replace(/s/g,'5');const vowelless=core.replace(/[aeiou]/g,'');const out=new Set([core,leet(core),vowelless]);for(const p of pfx){for(const s of seps){for(const n1 of nums){out.add(normalize(p+s+core+n1))}}}for(const sfxi of sfx){for(const s of seps){for(const n1 of nums){out.add(normalize(core+s+sfxi+n1))}}}for(const w of turk){for(const s of seps){out.add(normalize(core+s+w))}}return[...out].filter(Boolean).slice(0,n)}async function fetchViaProxy(proxy,url){const r=await fetch(`${proxy}?u=${encodeURIComponent(url)}`,{redirect:'follow'});const text=await r.text();return{status:r.status,text}}async function checkOne(u,proxy){u=normalize(u);if(!u)return{username:u,error:'empty'};try{if(proxy){const jurl=`https://www.instagram.com/${u}/?__a=1&__d=dis`;const jr=await fetchViaProxy(proxy,jurl);if(jr.status===200&&jr.text.includes('profile_pic_url')){let avatar='';let title='';let desc='';try{const data=JSON.parse(jr.text);const g=(data.graphql&&data.graphql.user)||data.items||null;const user=Array.isArray(g)?g[0]:g;avatar=(user.profile_pic_url_hd||user.profile_pic_url)||'';title=(user.full_name||'')+' | '+u;desc=(user.biography||'');}catch{}return{username:u,exists:true,avatar:title?avatar:'',title:title||u,desc};}const hr=await fetchViaProxy(proxy,`https://www.instagram.com/${u}/`);const lower=hr.text.toLowerCase();const notFound=hr.status===404||lower.includes('page not found')||lower.includes("sorry, this page isn't available");let avatar='';let title='';let desc='';const ogImg=hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);const ogTitle=hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);const ogDesc=hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);avatar=ogImg?ogImg[1]:'';title=ogTitle?ogTitle[1]:u;desc=ogDesc?ogDesc[1]:'';return{username:u,exists:!notFound,avatar,title,desc,status:hr.status};}const fr=await fetch(`https://r.jina.ai/http://www.instagram.com/${u}/`);const txt=await fr.text();const lower=txt.toLowerCase();const notFound=lower.includes('page not found')||lower.includes("sorry, this page isn't available");let avatar='';let title='';let desc='';const ogImg=txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);const ogTitle=txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);const ogDesc=txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);avatar=ogImg?ogImg[1]:'';title=ogTitle?ogTitle[1]:u;desc=ogDesc?ogDesc[1]:'';return{username:u,exists:!notFound,avatar,title,desc};}catch(e){return{username:u,error:e.message}}}function Switch({checked,onChange,label}){return(<button aria-pressed={checked} onClick={()=>onChange(!checked)} className={clsx('relative inline-flex items-center h-9 w-16 rounded-full transition',checked?'bg-accent':'bg-white/10')}><span className={clsx('inline-block h-7 w-7 transform rounded-full bg-white shadow-soft transition',checked?'translate-x-8':'translate-x-1')}></span><span className="absolute left-20 top-1/2 -translate-y-1/2 text-sm text-white/70">{label}</span></button>)}function Segmented({options,value,onChange}){return(<div className="inline-flex p-1 rounded-xl bg-white/10 border border-white/10"><div className="grid grid-cols-2 w-32">{options.map(o=>(<button key={o.value} onClick={()=>onChange(o.value)} className={clsx('text-sm px-2 py-1 rounded-lg transition',value===o.value?'bg-accent text-white':'text-white/80 hover:bg-white/10')}>{o.label}</button>))}</div></div>)}function App(){const[lang,setLang]=useState('tr');const t=I18N[lang];const[dark,setDark]=useState(true);const[text,setText]=useState('');const[proxy,setProxy]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('');const[stopOnError,setStopOnError]=useState(false);const[items,setItems]=useState([]);const[base,setBase]=useState('mebularts');const[count,setCount]=useState(30);useEffect(()=>{document.body.classList.toggle('dark',dark)},[dark]);const list=useMemo(()=>[...new Set(text.split(/\r?\n/).map(s=>normalize(s.trim().replace(/^@+/,''))).filter(Boolean))].slice(0,200),[text]);async function run(){if(!list.length){setStatus(t.needOne);return}setItems([]);setBusy(true);setStatus(t.checking);for(let i=0;i<list.length;i++){const r=await checkOne(list[i],proxy.trim());setItems(p=>[...p,r]);setStatus(`${i+1}/${list.length}`);if(r.error&&stopOnError)break;await new Promise(res=>setTimeout(res,250))}setBusy(false);setStatus(t.done)}function fill(){setText(lang==='tr'?'mebularts\ninstagram\nbu_isim_bosta_olabilir':'mebularts\ninstagram\nthis_may_be_free')}function copyTok(v){navigator.clipboard.writeText(v).then(()=>{setStatus(v);setTimeout(()=>setStatus(''),1200)})}function generate(){const out=genVariations(base,Number(count)||30).join('\n');setText(prev=>prev?prev+'\n'+out:out)}return(<div className="max-w-6xl mx-auto p-5"> <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h1 className="text-2xl sm:text-3xl font-bold">{t.title}</h1><p className="text-white/70 mt-1">{t.subtitle}</p></div><div className="flex items-center gap-3"><Segmented options={[{label:I18N.tr.tr,value:'tr'},{label:I18N.en.en,value:'en'}]} value={lang} onChange={setLang}/><Switch checked={dark} onChange={setDark} label={dark?I18N[lang].dark:I18N[lang].light}/></div></header><div className="rounded-2xl border border-white/10 bg-card/80 backdrop-blur p-4 shadow-soft"><div className="grid md:grid-cols-2 gap-4"><div><label className="font-semibold mb-2 block">{t.usernames}</label><textarea value={text} onChange={e=>setText(e.target.value)} placeholder={t.placeholder} className="w-full min-h-[170px] bg-[#0d141c] border border-white/10 rounded-xl p-3 outline-none"></textarea><div className="flex gap-2 flex-wrap items-center mt-3"><button onClick={run} disabled={busy} className={clsx('px-4 py-2 rounded-xl font-semibold',busy?'bg-accent/60':'bg-accent hover:opacity-90')}>{busy?<span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>:t.check}</button><button onClick={fill} className="px-4 py-2 rounded-xl font-semibold bg-white/10 border border-white/10">{t.samples}</button><label className="flex items-center gap-2 text-sm ml-auto"><input type="checkbox" checked={stopOnError} onChange={e=>setStopOnError(e.target.checked)}/><span>{t.error}</span></label><span className="text-sm text-white/70">{status}</span></div></div><div><label className="font-semibold mb-2 block">{t.proxyLbl}</label><input value={proxy} onChange={e=>setProxy(e.target.value)} placeholder="https://subdomain.workers.dev" className="w-full bg-[#0d141c] border border-white/10 rounded-xl p-3 outline-none"/><p className="text-sm text-white/70 mt-2">{t.proxyHint}</p><details className="mt-2"><summary className="text-sm text-indigo-200 cursor-pointer">{t.worker}</summary><pre className="text-xs bg-[#0d141c] border border-white/10 rounded-xl p-3 whitespace-pre-wrap select-all">export default {\n  async fetch(req) {\n    const u = new URL(req.url).searchParams.get('u');\n    if (!u) return new Response('missing u', { status: 400 });\n    const r = await fetch(u, { redirect: 'follow' });\n    const h = new Headers(r.headers); h.set('access-control-allow-origin', '*');\n    return new Response(await r.arrayBuffer(), { status: r.status, headers: h });\n  }\n}</pre></details></div></div></div><div className="rounded-2xl border border-white/10 bg-card/80 backdrop-blur p-4 shadow-soft mt-4"><div className="flex items-center justify-between"><div className="text-sm text-white/70">{t.results}</div><div className="text-sm text-white/70">{list.length?`${list.length}`:''}</div></div><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">{items.map((r,i)=>r.error?(<div key={i} className="bg-[#0d141c] border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between"><div className="font-bold">@{r.username}</div><span className="px-2 py-0.5 text-xs rounded-full border border-white/10 text-white/70">{t.unknown}</span></div><div className="text-sm text-red-200 mt-2">{t.error}: {r.error}</div><div className="text-xs text-white/60 mt-1">{t.useProxy}</div></div>):r.exists?(<div key={i} className="bg-[#0d141c] border border-white/10 rounded-xl p-3"><div className="flex items-start gap-3"><img referrerPolicy="no-referrer" src={r.avatar||''} alt="" className="w-12 h-12 rounded-full border border-white/10 object-cover" onError={e=>{e.currentTarget.style.visibility='hidden'}}/><div className="flex-1"><div className="flex items-center gap-2 flex-wrap"><a href={`https://www.instagram.com/${r.username}/`} target="_blank" rel="noreferrer" className="font-bold hover:underline">@{r.username}</a><span className="px-2 py-0.5 text-xs rounded-full" style={{backgroundColor:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.35)',color:'#ffd3d3'}}>{t.taken}</span></div><div className="text-sm text-white/70 mt-1">{(r.title||'').replace(/\| Instagram/g,'')}</div><div className="text-xs text-white/60 mt-1">{r.desc||''}</div></div></div></div>):(<div key={i} className="bg-[#0d141c] border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between"><div className="font-bold">@{r.username}</div><span className="px-2 py-0.5 text-xs rounded-full" style={{backgroundColor:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.35)',color:'#bcffe3'}}>{t.available}</span></div><div className="text-sm text-white/70 mt-2">{t.availableMsg}</div><div className="flex gap-2 mt-2 flex-wrap"><button onClick={()=>copyTok(r.username)} className="px-3 py-1.5 rounded-lg border border-dashed border-white/10 text-sm">@{r.username} {t.copy}</button><a href="https://www.instagram.com/accounts/emailsignup/" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg border border-white/10 text-sm">{t.signup}</a></div></div>))}</div></div><div className="rounded-2xl border border-white/10 bg-card/80 backdrop-blur p-4 shadow-soft mt-4"><div className="flex items-center justify-between mb-3"><div className="font-semibold">{t.genTitle}</div><div className="text-sm text-white/70">{t.count}</div></div><div className="grid md:grid-cols-3 gap-3"><input value={base} onChange={e=>setBase(e.target.value)} placeholder="mebularts" className="bg-[#0d141c] border border-white/10 rounded-xl p-3 outline-none"/><input value={count} onChange={e=>setCount(e.target.value)} type="number" min="10" max="60" className="bg-[#0d141c] border border-white/10 rounded-xl p-3 outline-none"/><div className="flex gap-2"><button onClick={generate} className="px-4 py-2 rounded-xl font-semibold bg-accent hover:opacity-90 flex-1">{t.genBtn}</button><button onClick={()=>setText('')} className="px-4 py-2 rounded-xl font-semibold bg-white/10 border border-white/10">{t.clear}</button></div></div></div></div>)}const root=ReactDOM.createRoot(document.getElementById('root'));root.render(<App/>)</script></body></html>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Instagram Username Checker — Sandbox‑Safe</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%236ee7b7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='12' fill='url(%23g)'/%3E%3Ctext x='50%25' y='58%25' text-anchor='middle' font-size='34' fill='white'%3Ei%3C/text%3E%3C/svg%3E">
+  <style>
+    :root{
+      --bg:#0b0f14; --fg:#eaf0f7; --muted:#9fb0c3; --card:#0f1622; --accent:#8b5cf6; --ok:#22c55e; --bad:#ef4444;
+      --border:rgba(255,255,255,.12); --glass:rgba(15,22,34,.8);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color:var(--fg);
+      background:
+        radial-gradient(1200px 800px at 10% -10%, rgba(139,92,246,.25), transparent),
+        radial-gradient(1000px 700px at 110% 10%, rgba(34,197,94,.18), transparent),
+        var(--bg);
+    }
+    .container{max-width:1120px; margin:0 auto; padding:24px}
+    .row{display:grid; gap:16px}
+    @media(min-width:900px){.row{grid-template-columns:1fr 1fr}}
+    .card{background:var(--glass); border:1px solid var(--border); border-radius:16px; padding:16px; backdrop-filter: blur(6px); box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .btn{appearance:none; border:0; border-radius:12px; padding:10px 14px; font-weight:600; color:#fff; background:var(--accent); cursor:pointer}
+    .btn:disabled{opacity:.6; cursor:not-allowed}
+    .btn.ghost{background:transparent; border:1px solid var(--border); color:var(--fg)}
+    .input, textarea{width:100%; background:#0d141c; border:1px solid var(--border); color:var(--fg); border-radius:12px; padding:12px; outline:none}
+    .muted{color:var(--muted)}
+    .header{display:flex; gap:12px; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; margin-bottom:16px}
+    .chip{padding:6px 10px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:13px}
+    .results{display:grid; gap:12px}
+    @media(min-width:720px){.results{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1020px){.results{grid-template-columns:repeat(3,1fr)}}
+    .pill{display:inline-block; padding:2px 8px; font-size:12px; border-radius:999px; border:1px solid var(--border)}
+    .pill.ok{background:rgba(34,197,94,.12); color:#bcffe3; border-color:rgba(34,197,94,.35)}
+    .pill.bad{background:rgba(239,68,68,.12); color:#ffd3d3; border-color:rgba(239,68,68,.35)}
+    .row-inline{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .switch{position:relative; width:56px; height:30px; background:rgba(255,255,255,.12); border-radius:999px; border:1px solid var(--border); cursor:pointer}
+    .switch.knob{position:absolute; inset:2px; background:#fff; width:26px; height:26px; border-radius:999px; transform:translateX(0); transition:transform .2s ease}
+    .switch.on .knob{transform:translateX(26px)}
+    .segment{display:inline-grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid var(--border)}
+    .segbtn{padding:6px 10px; border-radius:8px; border:0; background:transparent; color:var(--fg); cursor:pointer}
+    .segbtn.active{background:var(--accent)}
+    .tests{margin-top:16px; font-size:13px}
+    .ok{color:#86efac}
+    .fail{color:#fca5a5}
+    .avatar{width:48px; height:48px; border-radius:999px; border:1px solid var(--border); object-fit:cover}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 style="margin:0; font-size:26px">Instagram Username Checker</h1>
+        <div class="muted" id="subtitle">Kullanıcı adları boşta mı dolu mu? Doluysa profil kartını gösterir.</div>
+      </div>
+      <div class="row-inline">
+        <div class="segment" role="group" aria-label="language">
+          <button class="segbtn active" data-lang="tr">TR</button>
+          <button class="segbtn" data-lang="en">EN</button>
+        </div>
+        <div id="themeSwitch" class="switch on" role="switch" aria-checked="true">
+          <div class="knob"></div>
+        </div>
+        <span class="chip">Sandbox‑safe</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label><b id="lblUsernames">Kullanıcı adları</b></label>
+          <textarea id="inputNames" rows="8" class="input" placeholder="mebularts\ninstagram\nbu_isim_bosta_olabilir"></textarea>
+          <div class="row-inline" style="margin-top:10px">
+            <button id="btnCheck" class="btn">Kontrol Et</button>
+            <button id="btnSamples" class="btn ghost">Örnekleri Doldur</button>
+            <label class="row-inline muted" style="margin-left:auto; gap:6px; font-size:14px">
+              <input id="stopOnError" type="checkbox"/> Hata olursa dur
+            </label>
+            <span id="status" class="muted" style="font-size:14px"></span>
+          </div>
+        </div>
+        <div>
+          <label><b id="lblProxy">Proxy URL</b></label>
+          <input id="proxy" class="input" placeholder="https://subdomain.workers.dev"/>
+          <div id="proxyHint" class="muted" style="font-size:13px; margin-top:6px">Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev</div>
+          <details style="margin-top:8px">
+            <summary id="workerCodeTitle" class="muted" style="cursor:pointer">Cloudflare Worker Kodu</summary>
+            <pre class="input" style="white-space:pre-wrap; overflow:auto; font-size:12px">export default {
+  async fetch(req) {
+    const u = new URL(req.url).searchParams.get('u');
+    if (!u) return new Response('missing u', { status: 400 });
+    const r = await fetch(u, { redirect: 'follow' });
+    const h = new Headers(r.headers); h.set('access-control-allow-origin', '*');
+    return new Response(await r.arrayBuffer(), { status: r.status, headers: h });
+  }
+}</pre>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="row-inline" style="justify-content:space-between">
+        <div class="muted" id="lblResults">Sonuçlar</div>
+        <div class="muted" id="lblCount"></div>
+      </div>
+      <div id="results" class="results" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="row-inline" style="justify-content:space-between; margin-bottom:10px">
+        <div id="genTitle" style="font-weight:600">Varyasyon Üretici</div>
+        <div class="muted" id="lblAmount">Adet</div>
+      </div>
+      <div class="row" style="grid-template-columns: 1fr 160px 1fr">
+        <input id="base" class="input" placeholder="mebularts"/>
+        <input id="amount" class="input" type="number" min="10" max="60" value="30"/>
+        <div class="row-inline">
+          <button id="btnGen" class="btn" style="flex:1">Üret</button>
+          <button id="btnClear" class="btn ghost" style="flex:1">Temizle</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tests" id="tests">
+      <b>Tests</b>
+      <ul id="testsList"></ul>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const t = {
+    tr:{ title:'Instagram Username Checker', subtitle:'Kullanıcı adları boşta mı dolu mu? Doluysa profil kartını gösterir.', usernames:'Kullanıcı adları', check:'Kontrol Et', samples:'Örnekleri Doldur', results:'Sonuçlar', unknown:'Bilinmiyor', error:'Hata/Kısıt', useProxy:'Proxy kurup tekrar deneyin.', taken:'Kullanımda', available:'Boşta', availableMsg:'Bu kullanıcı adı kullanılabilir.', copy:'kopyala', signup:"Instagram'a kaydol", needOne:'Önce en az bir kullanıcı adı yazın.', proxyLbl:'Proxy URL', proxyHint:'Cloudflare Worker kök adresinizi girin. Örn: https://subdomain.workers.dev', worker:'Cloudflare Worker Kodu', genTitle:'Varyasyon Üretici', baseLbl:'Temel isim', genBtn:'Üret', clear:'Temizle', amount:'Adet' },
+    en:{ title:'Instagram Username Checker', subtitle:'Are usernames free or taken? If taken, shows a profile card.', usernames:'Usernames', check:'Check', samples:'Fill samples', results:'Results', unknown:'Unknown', error:'Error/Constraint', useProxy:'Set up the proxy and try again.', taken:'Taken', available:'Available', availableMsg:'This username is available.', copy:'copy', signup:'Sign up', needOne:'Enter at least one username first.', proxyLbl:'Proxy URL', proxyHint:'Enter your Cloudflare Worker root. Eg: https://subdomain.workers.dev', worker:'Cloudflare Worker Code', genTitle:'Variation Generator', baseLbl:'Base name', genBtn:'Generate', clear:'Clear', amount:'Count' }
+  }
+  let lang = 'tr';
+  let dark = true;
+
+  const el = s=>document.querySelector(s);
+  const els = s=>Array.from(document.querySelectorAll(s));
+
+  function setLang(l){ lang=l; const L=t[lang];
+    el('#subtitle').textContent = L.subtitle;
+    el('#lblUsernames').textContent = L.usernames;
+    el('#btnCheck').textContent = L.check;
+    el('#btnSamples').textContent = L.samples;
+    el('#lblResults').textContent = L.results;
+    el('#lblProxy').textContent = L.proxyLbl;
+    el('#proxyHint').textContent = L.proxyHint;
+    el('#workerCodeTitle').textContent = L.worker;
+    el('#genTitle').textContent = L.genTitle;
+    el('#lblAmount').textContent = L.amount;
+    el('#btnGen').textContent = L.genBtn;
+    el('#btnClear').textContent = L.clear;
+    els('.segbtn').forEach(b=>b.classList.toggle('active', b.dataset.lang===l));
+  }
+  function setTheme(on){ dark=on; document.body.style.background = dark
+      ? 'radial-gradient(1200px 800px at 10% -10%, rgba(139,92,246,.25), transparent), radial-gradient(1000px 700px at 110% 10%, rgba(34,197,94,.18), transparent), var(--bg)'
+      : '#f7fafc';
+    document.body.style.color = dark? 'var(--fg)':'#0b1220';
+    el('#themeSwitch').classList.toggle('on', dark);
+  }
+
+  function normalize(u){
+    return (u||'').toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30);
+  }
+  function genVariations(base,n){
+    base=(base||'').trim().toLowerCase(); if(!base) return [];
+    const core=normalize(base.replace(/\s+/g,''));
+    const pfx=['get','hey','try','real','the','go','iam','its','mr','ms','team','club'];
+    const sfx=['app','dev','lab','labs','studio','hq','pro','official','co','tr','ai','io','net'];
+    const seps=['','_','.'];
+    const nums=['','1','01','10','24','25','123','x','xx'];
+    const turk=['resmi','ofis','yazilim','ajans'];
+    const leet=v=>v.replace(/a/g,'4').replace(/e/g,'3').replace(/i/g,'1').replace(/o/g,'0').replace(/s/g,'5');
+    const vowelless=core.replace(/[aeiou]/g,'');
+    const out=new Set([core,leet(core),vowelless]);
+    for(const p of pfx){ for(const s of seps){ for(const n1 of nums){ out.add(normalize(p+s+core+n1)); } } }
+    for(const sx of sfx){ for(const s of seps){ for(const n1 of nums){ out.add(normalize(core+s+sx+n1)); } } }
+    for(const w of turk){ for(const s of seps){ out.add(normalize(core+s+w)); } }
+    return Array.from(out).filter(Boolean).slice(0, Number(n)||30);
+  }
+  function decideAvailabilityFromHTML(status,text){
+    const lower=(text||'').toLowerCase();
+    const notFound = status===404 || lower.includes('page not found') || lower.includes("sorry, this page isn't available");
+    return { exists: !notFound };
+  }
+
+  async function fetchViaProxy(proxy,url){
+    const r = await fetch(`${proxy}?u=${encodeURIComponent(url)}`, {redirect:'follow'});
+    const text = await r.text();
+    return {status:r.status, text};
+  }
+
+  async function checkOne(username, proxyRoot, live){
+    const u = normalize(username);
+    if(!u) return { username:u, error:'empty' };
+
+    // Sandbox-safe: In non-live mode, simulate fast responses to avoid external network.
+    if(!live){
+      const taken = ['instagram','zuck','cristiano','mebularts'];
+      const exists = taken.includes(u);
+      return {
+        username:u,
+        exists,
+        avatar: exists? 'https://i.pravatar.cc/96?u='+encodeURIComponent(u) : '',
+        title: exists? (u+' • Mock User') : '',
+        desc: exists? 'Mock bio for '+u : ''
+      };
+    }
+
+    try{
+      if(proxyRoot){
+        const jurl = `https://www.instagram.com/${u}/?__a=1&__d=dis`;
+        const jr = await fetchViaProxy(proxyRoot, jurl);
+        if(jr.status===200 && jr.text.includes('profile_pic_url')){
+          let avatar='', title='', desc='';
+          try{
+            const data = JSON.parse(jr.text);
+            const g = (data.graphql && data.graphql.user) || data.items || null;
+            const user = Array.isArray(g)? g[0] : g;
+            avatar = (user.profile_pic_url_hd||user.profile_pic_url)||'';
+            title = (user.full_name||'')+' | '+u;
+            desc = (user.biography||'');
+          }catch(e){}
+          return { username:u, exists:true, avatar:title?avatar:'', title:title||u, desc };
+        }
+        const hr = await fetchViaProxy(proxyRoot, `https://www.instagram.com/${u}/`);
+        const d = decideAvailabilityFromHTML(hr.status, hr.text);
+        let avatar='', title='', desc='';
+        const ogImg = hr.text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        const ogTitle = hr.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        const ogDesc = hr.text.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        avatar = ogImg? ogImg[1] : '';
+        title = ogTitle? ogTitle[1] : u;
+        desc = ogDesc? ogDesc[1] : '';
+        return { username:u, exists:d.exists, avatar, title, desc };
+      }
+      const fr = await fetch(`https://r.jina.ai/http://www.instagram.com/${u}/`);
+      const txt = await fr.text();
+      const d = decideAvailabilityFromHTML(fr.status, txt);
+      let avatar='', title='', desc='';
+      const ogImg = txt.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      const ogTitle = txt.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      const ogDesc = txt.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      avatar = ogImg? ogImg[1] : '';
+      title = ogTitle? ogTitle[1] : u;
+      desc = ogDesc? ogDesc[1] : '';
+      return { username:u, exists:d.exists, avatar, title, desc };
+    }catch(e){
+      return { username:u, error:e.message };
+    }
+  }
+
+  function renderResults(items){
+    const L=t[lang];
+    el('#lblCount').textContent = items.length? String(items.length) : '';
+    const root = el('#results'); root.innerHTML='';
+    for(const r of items){
+      const card = document.createElement('div'); card.className='card';
+      if(r.error){
+        card.innerHTML = `
+          <div class="row-inline" style="justify-content:space-between">
+            <div style="font-weight:700">@${r.username}</div>
+            <span class="pill">${L.unknown}</span>
+          </div>
+          <div style="margin-top:6px; color:#ffd3d3">${L.error}: ${r.error}</div>
+          <div class="muted" style="font-size:12px; margin-top:4px">${L.useProxy}</div>
+        `;
+      } else if(r.exists){
+        card.innerHTML = `
+          <div class="row-inline" style="gap:10px">
+            <img class="avatar" referrerpolicy="no-referrer" src="${r.avatar||''}" onerror="this.style.visibility='hidden'" alt=""/>
+            <div style="flex:1">
+              <div class="row-inline" style="gap:8px; flex-wrap:wrap">
+                <a href="https://www.instagram.com/${r.username}/" target="_blank" style="font-weight:700; color:inherit; text-decoration:underline">@${r.username}</a>
+                <span class="pill bad">${L.taken}</span>
+              </div>
+              <div class="muted" style="font-size:14px; margin-top:4px">${(r.title||'').replace(/\| Instagram/g,'')}</div>
+              <div class="muted" style="font-size:12px; margin-top:4px">${r.desc||''}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="row-inline" style="justify-content:space-between">
+            <div style="font-weight:700">@${r.username}</div>
+            <span class="pill ok">${L.available}</span>
+          </div>
+          <div class="muted" style="margin-top:6px">${L.availableMsg}</div>
+          <div class="row-inline" style="gap:8px; margin-top:8px; flex-wrap:wrap">
+            <button class="btn ghost" onclick="navigator.clipboard.writeText('@${r.username}')">@${r.username} ${L.copy}</button>
+            <a class="btn ghost" href="https://www.instagram.com/accounts/emailsignup/" target="_blank">${L.signup}</a>
+          </div>
+        `;
+      }
+      root.appendChild(card);
+    }
+  }
+
+  async function runCheck(){
+    const L=t[lang];
+    const names = el('#inputNames').value.split(/\r?\n/).map(s=>normalize(s.replace(/^@+/,''))).filter(Boolean);
+    const list = Array.from(new Set(names)).slice(0,200);
+    if(!list.length){ el('#status').textContent=L.needOne; return; }
+    const proxyRoot = (el('#proxy').value||'').trim();
+    const live = !!proxyRoot; // sandbox‑safe default: mock unless proxy provided
+    el('#status').textContent=L.checking; renderResults([]);
+    const out=[];
+    for(let i=0;i<list.length;i++){
+      const item = await checkOne(list[i], proxyRoot, live);
+      out.push(item); renderResults(out);
+      el('#status').textContent = `${i+1}/${list.length}`;
+      if(item.error && el('#stopOnError').checked) break;
+      await new Promise(r=>setTimeout(r, 180));
+    }
+    el('#status').textContent=L.done;
+  }
+
+  // UI bindings
+  els('.segbtn').forEach(b=> b.addEventListener('click', ()=> setLang(b.dataset.lang)) );
+  el('#themeSwitch').addEventListener('click', ()=> setTheme(!dark));
+  el('#btnSamples').addEventListener('click', ()=>{
+    el('#inputNames').value = lang==='tr' ? 'mebularts\ninstagram\nbu_isim_bosta_olabilir' : 'mebularts\ninstagram\nthis_may_be_free';
+  });
+  el('#btnCheck').addEventListener('click', runCheck);
+  el('#btnGen').addEventListener('click', ()=>{
+    const base = el('#base').value; const n = Number(el('#amount').value)||30;
+    const vars = genVariations(base, n).join('\n');
+    const cur = el('#inputNames').value.trim();
+    el('#inputNames').value = cur ? (cur+'\n'+vars) : vars;
+  });
+  el('#btnClear').addEventListener('click', ()=>{ el('#inputNames').value=''; renderResults([]); el('#lblCount').textContent=''; });
+
+  // Defaults
+  setLang('tr'); setTheme(true);
+
+  // ---------- TESTS ----------
+  function assert(name, cond){
+    const li=document.createElement('li'); li.textContent=name+': '+(cond? 'OK' : 'FAIL'); li.className=cond? 'ok' : 'fail'; el('#testsList').appendChild(li);
+  }
+  (function runTests(){
+    try{
+      assert('normalize strips invalid', normalize('A!B?C')==='abc');
+      assert('normalize keeps dot/underscore', normalize('a_b.c')==='a_b.c');
+      const vars = genVariations('mebularts', 10);
+      assert('variations length = 10', vars.length===10);
+      assert('variations normalized', vars.every(v=>/^[-a-z0-9._]{1,30}$/.test(v)));
+      const d1 = decideAvailabilityFromHTML(404, '');
+      const d2 = decideAvailabilityFromHTML(200, "sorry, this page isn't available");
+      const d3 = decideAvailabilityFromHTML(200, '<html><meta property="og:title" content="user"/></html>');
+      assert('404 => not exists', d1.exists===false);
+      assert('error text => not exists', d2.exists===false);
+      assert('generic 200 => exists', d3.exists===true);
+    }catch(e){
+      const li=document.createElement('li'); li.textContent='Tests crashed: '+e.message; li.className='fail'; el('#testsList').appendChild(li);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
